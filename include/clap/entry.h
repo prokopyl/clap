@@ -31,9 +31,15 @@ extern "C" {
 // Each directory should be recursively searched for files and/or bundles as appropriate in your OS
 // ending with the extension `.clap`.
 //
+// Initialization rationale:
+//
 // As detailed in the respective functions' documentations below, the host is forbidden from calling
 // either init() or deinit() multiple times, without calling the other first. This is to enforce
 // a "normal" initialization pattern, where one can't construct or destroy an object multiple times.
+//
+// Having the ability to initialize a DSO again after it has been de-initialized, enables hosts to
+// e.g. quickly load and unload a DSO for scanning its plugins, and then load it again later to
+// actually use the plugins if needed.
 //
 // However, there are a few cases where the host may not be able to reliably prevent this from
 // happening, such as when multiple, separate hosts co-exist within the same address space (e.g.
@@ -77,18 +83,22 @@ typedef struct clap_plugin_entry {
    //
    // It also must only be called once, until a later call to deinit() is made, after which init()
    // can be called once more to re-initialize the DSO.
-   // This enables hosts to e.g. quickly load and unload a DSO for scanning its plugins, and then
-   // load it again later to actually use the plugins if needed.
    //
-   // As stated above, even though hosts are forbidden to do so directly, multiple calls before any
-   // deinit() call may still happen. Implementations *should* take this into account, and *must*
-   // do so as of CLAP 1.11.
+   // This function may be called on any thread, including a different one from the one a later call
+   // to deinit() (or a later init()) can be made.
+   //
+   // Hosts are forbidden to call this function simultaneously from multiple threads.
+   // It is also forbidden to call it simultaneously with *any* other CLAP-related symbols from the
+   // DSO, including (but not limited to) deinit().
+   //
+   // As detailed in the rationale above, even though hosts are forbidden to do so directly,
+   // multiple calls before any deinit() call may still happen. Implementations *should* handle this
+   // gracefully, and *must* do so as of CLAP 1.11.
    //
    // It should be as fast as possible, in order to perform a very quick scan of the plugin
-   // descriptors.
-   //
-   // It is forbidden to display graphical user interfaces in this call.
-   // It is forbidden to perform any user interaction in this call.
+   // descriptors:
+   // - It is forbidden to display graphical user interfaces in this call;
+   // - It is forbidden to perform any user interaction in this call.
    //
    // If the initialization depends upon expensive computation, maybe try to do them ahead of time
    // and cache the result.
@@ -97,15 +107,9 @@ typedef struct clap_plugin_entry {
    // uninitialized, and the host must not call deinit() nor any other CLAP-related symbols from the
    // DSO.
    // This function also returns true in the case where the DSO is already initialized, and no
-   // actual initialization work is done in this call, as explain above.
+   // actual initialization work is done in this call.
    //
    // plugin_path is the path to the DSO (Linux, Windows), or the bundle (macOS).
-   //
-   // This function may be called on any thread, including a different one from the one a later call
-   // to deinit() (or a later init()) can be made.
-   // However, it is forbidden to call this function simultaneously from multiple threads.
-   // It is also forbidden to call it simultaneously with *any* other CLAP-related symbols from the
-   // DSO, including (but not limited to) deinit().
    bool(CLAP_ABI *init)(const char *plugin_path);
 
    // De-initializes the DSO, freeing any resources allocated or initialized by init().
