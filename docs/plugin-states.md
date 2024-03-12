@@ -4,16 +4,15 @@ state create <<choice>>
 
 [*] --> create: plugin_factory.create
 
-create --> [*]: [create Error]
 
 create --> Created: [create Success]
-Created --> [*]: destroy
 
 state init_host_calls <<choice>>
 
 Created --> init_host_calls: init
 init_host_calls --> CanGetExtensions: [init calls host]
 CanGetExtensions --> init_host_calls: [host call complete]
+CanGetExtensions --> CanGetExtensions: get_extension
 
 state init <<choice>>
 init_host_calls --> init: [init completes]
@@ -36,7 +35,7 @@ state Instantiated {
     --
     state InstantiatedOtherThreads
     InstantiatedOtherThreads: Instantiated (other threads)
-InstantiatedOtherThreads --> InstantiatedOtherThreads: Thread-safe operations
+    InstantiatedOtherThreads --> InstantiatedOtherThreads: Thread-safe operations
     --
     state activate <<choice>>
 
@@ -68,9 +67,64 @@ InstantiatedOtherThreads --> InstantiatedOtherThreads: Thread-safe operations
         start --> Started: [start_processing Success]
         start --> Stopped: [start_processing Error]
         Started --> Stopped: stop_processing
+        Stopped --> Stopped: Audio-thread operations
+        Started --> Started: process
+        Started --> Started: Audio-thread operations
     }
 }
 
 before_deactivate --> Inactive: deactivate
 before_destroy --> [*]: destroy
+Created --> [*]: destroy
+create --> [*]: [create Error]
+```
+
+
+```mermaid
+stateDiagram-v2
+state create <<choice>>
+
+[*] --> create: plugin_factory.create
+
+create --> Created: [create Success]
+
+state init_host_calls <<choice>>
+
+Created --> init_host_calls: init
+init_host_calls --> CanGetExtensions: [init calls host]
+CanGetExtensions --> init_host_calls: [host call complete]
+
+state init <<choice>>
+init_host_calls --> init: [init completes]
+
+init --> Failed: [init Error]
+
+init --> Inactive: [init Success]
+
+Failed --> [*]: destroy
+
+state Instantiated {
+    state activate <<choice>>
+
+    Inactive --> activate: activate
+    activate --> Inactive: [activate Error]
+
+    activate --> Stopped: [activate Success]
+    Stopped --> Inactive: deactivate
+
+    state Active {
+        state Stopped
+        state Started
+        state start <<choice>>
+        
+        Stopped --> start: start_processing
+        start --> Started: [start_processing Success]
+        start --> Stopped: [start_processing Error]
+        Started --> Stopped: stop_processing
+    }
+}
+
+Inactive --> [*]: destroy
+Created --> [*]: destroy
+create --> [*]: [create Error]
 ```
